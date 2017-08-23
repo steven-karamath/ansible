@@ -1,0 +1,59 @@
+---
+- hosts: docker
+  remote_user: ubuntu
+  tasks:
+    - name: install python 2
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+    - name: ensure repository key is installed
+      apt_key:
+        id: 58118E89F3A912897C070ADBF76221572C52609D
+        keyserver: hkp://p80.pool.sks-keyservers.net:80
+        state: present
+    - name: install pip
+      apt: name=python-pip update_cache=yes
+    - pip:
+        name: docker-py
+    - name: ensure docker registry is available
+      apt_repository: repo='deb https://apt.dockerproject.org/repo ubuntu-xenial main' state=present
+
+    - name: ensure docker and dependencies are installed
+      apt: name=docker-engine update_cache=yes
+    - service: name=docker state=restarted
+
+    - name: Clone Docker files
+      git:
+        repo: https://github.com/steven-karamath/dockertest.git
+        dest: /opt
+        version: master
+        force: yes
+    
+    - name: build the stress image
+      docker_image: >
+        name=stress
+        tag=v1
+        path=/opt/Project1
+        state=present
+    
+    - name: build the cacti image
+      docker_image: >
+        name=cacti
+        tag=v1
+        path=/opt/Project2
+        state=present
+    
+    - name: start stress container
+      docker:
+        name: stress
+        image: "stress:v1"
+        state: reloaded
+        publish_all_ports: yes
+    
+    - name: start the cacti container
+      docker:
+        name: cacti
+        image: "cacti:v1"
+        state: reloaded
+        publish_all_ports: yes
+        ports: "80:80"
+    - name: run command in container cacti
+      command: docker exec cacti /sbin/restore
